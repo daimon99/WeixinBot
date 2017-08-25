@@ -29,6 +29,8 @@ from socket import timeout as timeout_error
 import mimetypes
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 
+import ssl
+context = ssl._create_unverified_context()
 
 def catchKeyboardInterrupt(fn):
     def wrapper(*args):
@@ -150,7 +152,7 @@ class WebWeixin(object):
         #r = requests.get(url=url, params=params)
         #r.encoding = 'utf-8'
         #data = r.text
-        data = self._post(url, params, False)
+        data = self._post(url, params, False).decode('utf-8')
         if data == '':
             return False
         regx = r'window.QRLogin.code = (\d+); window.QRLogin.uuid = "(\S+?)"'
@@ -1128,7 +1130,7 @@ class WebWeixin(object):
     def _post(self, url: object, params: object, jsonfmt: object = True) -> object:
         if jsonfmt:
             data = (json.dumps(params)).encode()
-            
+
             request = urllib.request.Request(url=url, data=data)
             request.add_header(
                 'ContentType', 'application/json; charset=UTF-8')
@@ -1138,6 +1140,7 @@ class WebWeixin(object):
 
         try:
             response = urllib.request.urlopen(request)
+            # response = urllib.request.urlopen(request, context=context)
             data = response.read()
             if jsonfmt:
                 return json.loads(data.decode('utf-8') )#object_hook=_decode_dict)
@@ -1152,7 +1155,7 @@ class WebWeixin(object):
             import traceback
             logging.error('generic exception: ' + traceback.format_exc())
 
-        return ''
+        return b''
 
     def _xiaodoubi(self, word):
         url = 'http://www.xiaodoubi.com/bot/chat.php'
@@ -1213,6 +1216,7 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     if not sys.platform.startswith('win'):
         import coloredlogs
+        coloredlogs.DEFAULT_LOG_FORMAT = '%(asctime)s %(module)s:%(lineno)s[%(process)d] %(levelname)s %(message)s'
         coloredlogs.install(level='DEBUG')
 
     webwx = WebWeixin()
