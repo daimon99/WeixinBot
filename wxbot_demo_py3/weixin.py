@@ -150,7 +150,7 @@ class WebWeixin(object):
         #r = requests.get(url=url, params=params)
         #r.encoding = 'utf-8'
         #data = r.text
-        data = self._post(url, params, False).decode("utf-8")
+        data = self._post(url, params, False)
         if data == '':
             return False
         regx = r'window.QRLogin.code = (\d+); window.QRLogin.uuid = "(\S+?)"'
