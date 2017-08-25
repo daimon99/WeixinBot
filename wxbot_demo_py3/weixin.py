@@ -1139,8 +1139,8 @@ class WebWeixin(object):
 
 
         try:
-            response = urllib.request.urlopen(request)
-            # response = urllib.request.urlopen(request, context=context)
+            # response = urllib.request.urlopen(request)
+            response = urllib.request.urlopen(request, context=context)
             data = response.read()
             if jsonfmt:
                 return json.loads(data.decode('utf-8') )#object_hook=_decode_dict)
