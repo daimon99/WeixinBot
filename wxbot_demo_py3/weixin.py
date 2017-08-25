@@ -395,22 +395,23 @@ class WebWeixin(object):
                     'webpush.wx2.qq.com',
                     'wx8.qq.com',
                     'webpush.wx8.qq.com',
-                    # 'qq.com',
-                    # 'webpush.wx.qq.com',
+                    'qq.com',
+                    'webpush.wx.qq.com',
                     'web2.wechat.com',
                     'webpush.web2.wechat.com',
-                    # 'wechat.com',
+                    'wechat.com',
                     'webpush.web.wechat.com',
                     'webpush.weixin.qq.com',
                     'webpush.wechat.com',
                     'webpush1.wechat.com',
                     'webpush2.wechat.com',
                     # 'webpush.wx.qq.com',
-                    'webpush2.wx.qq.com']
+                    'webpush2.wx.qq.com',
+                    ]
         for host in SyncHost:
             self.syncHost = host
             [retcode, selector] = self.synccheck()
-            logging.debug('retcode: %s', retcode)
+            logging.debug('retcode: %s, host: %s', retcode, host)
             if retcode in ['0']:
                 return True
         return False
@@ -636,7 +637,7 @@ class WebWeixin(object):
     def webwxgetmsgimg(self, msgid):
         url = self.base_uri + \
               '/webwxgetmsgimg?MsgID=%s&skey=%s' % (msgid, self.skey)
-        data = self._get(url)
+        data = self._get(url, api='webwxgetimage')
         if data == '':
             return ''
         fn = 'img_' + msgid + '.jpg'
@@ -793,6 +794,7 @@ class WebWeixin(object):
             print('%s %s -> %s: %s' % (message_id, srcName.strip(), dstName.strip(), content.replace('<br/>', '\n')))
             logging.info('%s %s -> %s: %s' % (message_id, srcName.strip(),
                                               dstName.strip(), content.replace('<br/>', '\n')))
+        return srcName, groupName, dstName, content
 
     def handleMsg(self, r):
         for msg in r['AddMsgList']:
@@ -813,19 +815,26 @@ class WebWeixin(object):
 
             if msgType == 1:
                 raw_msg = {'raw_msg': msg}
-                self._showMsg(raw_msg)
+                srcName, groupName, dstName, content = self._showMsg(raw_msg)
                 # 自己加的代码-------------------------------------------#
                 # if self.autoReplyRevokeMode:
                 #    store
                 # 自己加的代码-------------------------------------------#
                 if self.autoReplyMode:
-                    ans = self._xiaodoubi(content) + '\n[微信机器人自动回复]'
-                    if self.webwxsendmsg(ans, msg['FromUserName']):
-                        print('自动回复: ' + ans)
-                        logging.info('自动回复: ' + ans)
-                    else:
-                        print('自动回复失败')
-                        logging.info('自动回复失败')
+
+                    if groupName and (
+                                groupName.startswith('世界是平的') or
+                                groupName.startswith('慧信通技术交流')
+
+                    ):
+                        # ans = self._xiaodoubi(content) + '\n[微信机器人自动回复]'
+                        ans = '【机器人自动回复】'
+                        if self.webwxsendmsg(ans, msg['ToUserName']):
+                            print('自动回复: ' + ans)
+                            logging.info('自动回复: ' + ans)
+                        else:
+                            print('自动回复失败')
+                            logging.info('自动回复失败')
             elif msgType == 3:
                 image = self.webwxgetmsgimg(msgid)
                 raw_msg = {'raw_msg': msg,
@@ -914,7 +923,7 @@ class WebWeixin(object):
                 print('[*] 你在其他地方登录了 WEB 版微信，债见')
                 logging.debug('[*] 你在其他地方登录了 WEB 版微信，债见')
                 break
-            elif retcode in ['0', '1102']:
+            elif retcode in ['0']:
                 if selector == '2':
                     r = self.webwxsync()
                     if r is not None:
@@ -1023,6 +1032,7 @@ class WebWeixin(object):
             print(self)
         logging.debug(self)
 
+        # if self.interactive and input('[*] 是否开启自动回复模式(y/n): ') == 'y':
         if self.interactive and input('[*] 是否开启自动回复模式(y/n): ') == 'y':
             self.autoReplyMode = True
             print('[*] 自动回复模式 ... 开启')
@@ -1031,12 +1041,13 @@ class WebWeixin(object):
             print('[*] 自动回复模式 ... 关闭')
             logging.debug('[*] 自动回复模式 ... 关闭')
 
-        if sys.platform.startswith('win'):
-            import _thread
-            _thread.start_new_thread(self.listenMsgMode())
-        else:
-            listenProcess = multiprocessing.Process(target=self.listenMsgMode)
-            listenProcess.start()
+        # if sys.platform.startswith('win'):
+        #     import _thread
+        #     _thread.start_new_thread(self.listenMsgMode())
+        # else:
+        #     listenProcess = multiprocessing.Process(target=self.listenMsgMode)
+        #     listenProcess.start()
+        self.listenMsgMode()
 
         while True:
             text = input('')
@@ -1114,13 +1125,11 @@ class WebWeixin(object):
         result = None
         if type(data) == str:
             result = data
-        elif type(data) == str:
+        elif type(data) == bytes:
             result = data.decode('utf-8')
         return result
 
     def _get(self, url: object, api: object = None, timeout: object = None, save_cookie: bool = False) -> object:
-        # request = urllib.request.Request(url=url)
-        # request.add_header('Referer', 'https://wx.qq.com/')
         global wx_cookie
         headers = dict()
         headers.update(wx_headers)
@@ -1133,16 +1142,20 @@ class WebWeixin(object):
                 response = requests.get(url, headers=headers, cookies=wx_cookie, timeout=timeout)
             else:
                 response = requests.get(url, headers=headers, cookies=wx_cookie)
+            # with open('wx-%s.log' % time.time(), 'wb') as f:
+            #     f.write(response.content)
             if save_cookie:
                 wx_cookie = response.cookies
             logging.debug('cookies: %s', wx_cookie)
-            if api == 'webwxgetvoice' or api == 'webwxgetvideo':
+            if api == 'webwxgetvoice' or api == 'webwxgetvideo' or api == 'webwxgetimage':
                 data = response.content
             else:
                 data = response.text
             logging.debug(url)
             return data
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError):
+        except (
+                requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout,
+                requests.exceptions.ConnectionError):
             logging.error('ReadTimeout, url=%s', url)
         except urllib.error.HTTPError as e:
             logging.error('HTTPError = ' + str(e.code))
@@ -1161,35 +1174,27 @@ class WebWeixin(object):
 
     def _post(self, url: object, params: object, jsonfmt: object = True, save_cookie: bool = False) -> object:
 
-        # if jsonfmt:
-        #     data = (json.dumps(params)).encode()
-        #
-        #     request = urllib.request.Request(url=url, data=data)
-        #     request.add_header(
-        #         'ContentType', 'application/json; charset=UTF-8')
-        #     request.add_header(
-        #         'Referer', 'https://wx.qq.com/?&lang=zh_CN')
-        #     request.add_header(
-        #         'User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) AppleWebKit/601.5.17 (KHTML, like Gecko) Version/9.1 Safari/601.5.17'
-        #     )
-        # else:
-        #     request = urllib.request.Request(url=url, data=urllib.parse.urlencode(params).encode(encoding='utf-8'))
         global wx_cookie
 
         try:
-            # response = urllib.request.urlopen(request)
-            # response = urllib.request.urlopen(request, context=context)
-            # data = response.read()
             if jsonfmt:
                 response = requests.post(url, json=params, cookies=wx_cookie)
             else:
                 response = requests.post(url, params, cookies=wx_cookie)
+            import time
+            # with open('wx-%s.log' % time.time(), 'wb') as f:
+            #     f.write(response.content)
             if save_cookie:
                 wx_cookie = response.cookies
             if jsonfmt:
+                response.encoding = 'utf-8'  # 不知道为什么，这里获取到的Encoding总是iso-8859-1
                 return response.json()
             else:
                 return response.content
+        except (
+                requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout,
+                requests.exceptions.ConnectionError):
+            logging.error('ReadTimeout, url=%s', url)
         except urllib.error.HTTPError as e:
             logging.error('HTTPError = ' + str(e.code))
         except urllib.error.URLError as e:
@@ -1206,7 +1211,7 @@ class WebWeixin(object):
         url = 'http://www.xiaodoubi.com/bot/chat.php'
         try:
             r = requests.post(url, data={'chat': word})
-            return r.content
+            return r.text
         except:
             return "让我一个人静静 T_T..."
 
@@ -1258,11 +1263,13 @@ if sys.stdout.encoding == 'cp936':
 
 if __name__ == '__main__':
     logger = logging.getLogger(__name__)
+
     if not sys.platform.startswith('win'):
         import coloredlogs
 
         coloredlogs.DEFAULT_LOG_FORMAT = '%(asctime)s %(module)s:%(lineno)s[%(process)d] %(levelname)s %(message)s'
-        coloredlogs.install(level='DEBUG')
+        coloredlogs.install(level='INFO')
 
     webwx = WebWeixin()
+    webwx.autoReplyMode = True
     webwx.start()
