@@ -395,8 +395,8 @@ class WebWeixin(object):
                     'webpush.wx2.qq.com',
                     'wx8.qq.com',
                     'webpush.wx8.qq.com',
-                    'qq.com',
-                    'webpush.wx.qq.com',
+                    # 'qq.com',
+                    # 'webpush.wx.qq.com',
                     'web2.wechat.com',
                     'webpush.web2.wechat.com',
                     'wechat.com',
@@ -405,7 +405,7 @@ class WebWeixin(object):
                     'webpush.wechat.com',
                     'webpush1.wechat.com',
                     'webpush2.wechat.com',
-                    'webpush.wx.qq.com',
+                    # 'webpush.wx.qq.com',
                     'webpush2.wx.qq.com']
         for host in SyncHost:
             self.syncHost = host
@@ -1142,6 +1142,8 @@ class WebWeixin(object):
                 data = response.text
             logging.debug(url)
             return data
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout):
+            logging.error('ReadTimeout, url=%s', url)
         except urllib.error.HTTPError as e:
             logging.error('HTTPError = ' + str(e.code))
         except urllib.error.URLError as e:
