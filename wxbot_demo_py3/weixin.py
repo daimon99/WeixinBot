@@ -1105,7 +1105,7 @@ class WebWeixin(object):
         if api == 'webwxgetvideo':
             request.add_header('Range', 'bytes=0-')
         try:
-            response = urllib.request.urlopen(request, timeout=timeout) if timeout else urllib.request.urlopen(request)
+            response = urllib.request.urlopen(request, timeout=timeout, context=context) if timeout else urllib.request.urlopen(request, context=context)
             if api == 'webwxgetvoice' or api == 'webwxgetvideo':
                 data = response.read()
             else:
