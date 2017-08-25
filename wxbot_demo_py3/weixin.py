@@ -399,7 +399,7 @@ class WebWeixin(object):
                     # 'webpush.wx.qq.com',
                     'web2.wechat.com',
                     'webpush.web2.wechat.com',
-                    'wechat.com',
+                    # 'wechat.com',
                     'webpush.web.wechat.com',
                     'webpush.weixin.qq.com',
                     'webpush.wechat.com',
@@ -1142,7 +1142,7 @@ class WebWeixin(object):
                 data = response.text
             logging.debug(url)
             return data
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout):
+        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError):
             logging.error('ReadTimeout, url=%s', url)
         except urllib.error.HTTPError as e:
             logging.error('HTTPError = ' + str(e.code))
