@@ -1,0 +1,15 @@
+django >= 1.11
+django-extensions
+
+colorama
+coloredlogs
+humanfriendly
+lxml
+qrcode
+requests
+six
+requests_toolbelt
+pyqrcode
+certifi
+
+fabric

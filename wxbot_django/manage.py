@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import wxbot_django.config
 
 if __name__ == "__main__":
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "wxbot_django.settings")
@@ -19,4 +20,8 @@ if __name__ == "__main__":
                 "forget to activate a virtual environment?"
             )
         raise
+    default_port = wxbot_django.config.PORT
+    from django.core.management.commands import runserver
+
+    runserver.Command.default_port = default_port
     execute_from_command_line(sys.argv)
