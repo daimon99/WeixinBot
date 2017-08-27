@@ -51,3 +51,38 @@ class WxRawAdmin(admin.ModelAdmin):
 @admin.register(m.WxMsgHistory)
 class WxMsgRecvHistoryAdmin(admin.ModelAdmin):
     list_display = [f.name for f in m.WxMsgHistory._meta.fields]
+
+
+@admin.register(m.WxUser)
+class WxUserAdmin(admin.ModelAdmin):
+    list_display = [f.name for f in m.WxUser._meta.fields]
+
+
+@admin.register(m.WxLoginHistory)
+class WxLoginHistory(admin.ModelAdmin):
+    change_list_template = 'wxr/WxLoginHistory/change_list.html'
+    list_per_page = 10
+
+    list_display = (
+        'pk', 'qr_image', 'created', 'modified', 'uin', 'login_on', 'device_id', 'sid', 'skey', 'pass_ticket',
+        'synckey')
+    actions = ['kill_process', ]
+
+    def qr_image(self, obj):
+        return format_html('<img src="data:image/png;base64,{}" height=50px width=50px/>', obj.qr_image_base64)
+
+    qr_image.admin_order_field = 'created'
+
+    def kill_process(self, req, qs):
+        from .views import processes
+        killed_list = []
+        for i in qs:
+            pid = i.pid
+            p = processes.get(pid)
+            if p:
+                killed_list.append(str(p.pid))
+                p.terminate()
+        if killed_list:
+            self.message_user(req, '杀掉了：' + ','.join(killed_list))
+        else:
+            self.message_user(req, '没有活跃进程')

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+import pickle
 import http.client
 import http.cookiejar
 import json
@@ -39,7 +40,8 @@ import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "wxbot_django.settings")
 django.setup()
 
-from .dblog import log_wx_raw, log_wx_recv, log_wx_send
+from .dblog import log_wx_raw, log_wx_recv, log_wx_send, log_wx_user, log_wx_login, log_wx_synckey, log_wx_qr, \
+    get_login_id
 
 wx_headers = {
     'Referer': 'https://wx.qq.com/'
@@ -103,6 +105,7 @@ class WebWeixin(object):
         return description
 
     def __init__(self):
+        self.silence = False
         self.DEBUG = False
         self.commandLineQRCode = False
         self.uuid = ''
@@ -146,9 +149,11 @@ class WebWeixin(object):
         self.media_count = -1
 
         self.cookie = http.cookiejar.CookieJar()
-        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookie))
-        opener.addheaders = [('User-agent', self.user_agent)]
-        urllib.request.install_opener(opener)
+        # opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookie))
+        # opener.addheaders = [('User-agent', self.user_agent)]
+        # urllib.request.install_opener(opener)
+
+        self.login_id = None
 
     def loadConfig(self, config):
         if config['DEBUG']:
@@ -208,6 +213,13 @@ class WebWeixin(object):
             if data == '':
                 return
             QRCODE_PATH = self._saveFile('qrcode.jpg', data, '_showQRCodeImg')
+
+            # save qrcode to login
+            log_wx_qr(self.login_id, os.getpid(), data)
+
+            if self.silence:
+                return
+
             if str == 'win':
                 os.startfile(QRCODE_PATH)
             elif str == 'macos':
@@ -281,6 +293,9 @@ class WebWeixin(object):
         if '' in (self.skey, self.sid, self.uin, self.pass_ticket):
             return False
 
+        log_wx_login(
+            self.login_id, self.uin, self.sid, self.skey, self.deviceId, self.pass_ticket, self.cookie)
+
         self.BaseRequest = {
             'Uin': int(self.uin),
             'Sid': self.sid,
@@ -300,9 +315,12 @@ class WebWeixin(object):
             return False
         self.SyncKey = dic['SyncKey']
         self.User = dic['User']
+        log_wx_user(self.User)
+        logging.info('User: %s', self.User)
         # synckey for synccheck
         self.synckey = '|'.join(
             [str(keyVal['Key']) + '_' + str(keyVal['Val']) for keyVal in self.SyncKey['List']])
+        log_wx_synckey(self.login_id, self.synckey)
 
         return dic['BaseResponse']['Ret'] == 0
 
@@ -1013,10 +1031,10 @@ class WebWeixin(object):
             print()
             logging.debug('[*] 微信网页版 ... 开动')
             self.genQRCode()
-            print('[*] 请使用微信扫描二维码以登录 ... ')
+            self._echo('[*] 请使用微信扫描二维码以登录 ... ')
             if not self.waitForLogin():
                 continue
-                print('[*] 请在手机上点击确认以登录 ... ')
+                self._echo('[*] 请在手机上点击确认以登录 ... ')
             if not self.waitForLogin(0):
                 continue
             break
@@ -1042,10 +1060,10 @@ class WebWeixin(object):
         # if self.interactive and input('[*] 是否开启自动回复模式(y/n): ') == 'y':
         if self.interactive and input('[*] 是否开启自动回复模式(y/n): ') == 'y':
             self.autoReplyMode = True
-            print('[*] 自动回复模式 ... 开启')
+            self._echo('[*] 自动回复模式 ... 开启')
             logging.debug('[*] 自动回复模式 ... 开启')
         else:
-            print('[*] 自动回复模式 ... 关闭')
+            self._echo('[*] 自动回复模式 ... 关闭')
             logging.debug('[*] 自动回复模式 ... 关闭')
 
         # if sys.platform.startswith('win'):
@@ -1096,17 +1114,18 @@ class WebWeixin(object):
     def _run(self, str, func, *args):
         self._echo(str)
         if func(*args):
-            print('成功')
+            self._echo('成功')
             logging.debug('%s... 成功' % (str))
         else:
-            print('失败\n[*] 退出程序')
+            self._echo('失败\n[*] 退出程序')
             logging.debug('%s... 失败' % (str))
             logging.debug('[*] 退出程序')
             exit()
 
     def _echo(self, str):
-        sys.stdout.write(str)
-        sys.stdout.flush()
+        # sys.stdout.write(str)
+        # sys.stdout.flush()
+        logging.info(str)
 
     def _printQR(self, mat):
         for i in mat:
@@ -1153,7 +1172,7 @@ class WebWeixin(object):
             logging.info('response headers: %s', response.headers)
             if save_cookie:
                 self.cookie = response.cookies
-            logging.debug('cookies: %s', wx_cookie)
+            logging.debug('cookies: %s', self.cookie)
             if api == 'webwxgetvoice' or api == 'webwxgetvideo' or api == 'webwxgetimage':
                 data = response.content
             else:
@@ -1185,8 +1204,6 @@ class WebWeixin(object):
         return ''
 
     def _post(self, url: object, params: object, jsonfmt: object = True, save_cookie: bool = False) -> object:
-
-        global wx_cookie
 
         try:
             if jsonfmt:
@@ -1282,14 +1299,32 @@ if sys.stdout.encoding == 'cp936':
     sys.stdout = UnicodeStreamFilter(sys.stdout)
 
 if __name__ == '__main__':
-    logger = logging.getLogger(__name__)
 
     if not sys.platform.startswith('win'):
         import coloredlogs
+        import logging.handlers
+        import os.path
 
-        coloredlogs.DEFAULT_LOG_FORMAT = '%(asctime)s %(module)s:%(lineno)s[%(process)d] %(levelname)s %(message)s'
-        coloredlogs.install(level='INFO')
+        LOG_DIR = os.path.dirname(os.path.dirname(__file__))
+        os.makedirs(os.path.join(LOG_DIR, 'logs/'), exist_ok=True)
+
+        login_id = get_login_id()
+
+        wxlog = logging.handlers.WatchedFileHandler(os.path.join(LOG_DIR, 'logs/%s.log' % login_id))
+        wxlog.setFormatter(
+            logging.Formatter('%(asctime)s %(module)s:%(lineno)s[%(process)d] %(levelname)s %(message)s'))
+        logging.root.handlers = [wxlog, ]
+        logging.root.level = logging.INFO
+
+        logging.info('#### START ####')
+        logging.info('pid: %s', os.getpid())
+
+        # print('hi3')
+
+        # coloredlogs.DEFAULT_LOG_FORMAT = '%(asctime)s %(module)s:%(lineno)s[%(process)d] %(levelname)s %(message)s'
+        # coloredlogs.install(level='INFO', stream=wxlog)
 
     webwx = WebWeixin()
     webwx.autoReplyMode = True
+    webwx.login_id = login_id
     webwx.start()
